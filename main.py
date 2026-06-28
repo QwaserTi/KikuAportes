@@ -12,7 +12,7 @@ MENU = ReplyKeyboardMarkup(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎬 *KikuAportes*\n\nBienvenido.\n\nAquí puedes enviar fotos, videos, audios y GIFs.\n\n👇 Elige una opción:",
+        "🎬 *KikuAportes*\n\nBienvenido.\n\nAquí puedes enviar fotos, videos, audios y GIFs (solo contenido casero).\n\n👇 Elige una opción:",
         parse_mode="Markdown",
         reply_markup=MENU
     )
