@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 class AporteService:
     def __init__(self):
         self.usuarios = {}
@@ -18,18 +19,49 @@ class AporteService:
     def get(self, user_id):
         return self.usuarios.get(user_id)
 
-    def set_comentario(self, user_id, texto):
-        if user_id in self.usuarios:
-            self.usuarios[user_id]["comentario"] = texto
-            self.usuarios[user_id]["estado"] = "WAITING_MEDIA"
+    def set_comentario(self, user_id, comentario):
+        aporte = self.get(user_id)
+        if not aporte:
+            return
+
+        aporte["comentario"] = comentario
+        aporte["estado"] = "WAITING_MEDIA"
 
     def agregar_archivo(self, user_id, file_id, tipo):
-        if user_id in self.usuarios:
-            self.usuarios[user_id]["archivos"].append({
-                "file_id": file_id,
-                "tipo": tipo
-            })
+        aporte = self.get(user_id)
+        if not aporte:
+            return
+
+        aporte["archivos"].append({
+            "file_id": file_id,
+            "tipo": tipo
+        })
+
+    def contar_archivos(self, user_id):
+        aporte = self.get(user_id)
+
+        if not aporte:
+            return {
+                "photo": 0,
+                "video": 0,
+                "document": 0,
+                "audio": 0
+            }
+
+        contador = {
+            "photo": 0,
+            "video": 0,
+            "document": 0,
+            "audio": 0
+        }
+
+        for archivo in aporte["archivos"]:
+            tipo = archivo["tipo"]
+
+            if tipo in contador:
+                contador[tipo] += 1
+
+        return contador
 
     def limpiar(self, user_id):
-        if user_id in self.usuarios:
-            del self.usuarios[user_id]
+        self.usuarios.pop(user_id, None)
