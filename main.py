@@ -21,6 +21,7 @@ def main():
     # ---------------- HANDLERS ----------------
     app.add_handler(CommandHandler("start", start))
 
+    print("🔥 CallbackQueryHandler REGISTRADO")
     app.add_handler(CallbackQueryHandler(buttons))
 
     app.add_handler(MessageHandler(filters.ALL, mensajes))
