@@ -65,3 +65,6 @@ class AporteService:
 
     def limpiar(self, user_id):
         self.usuarios.pop(user_id, None)
+
+
+service = AporteService()
