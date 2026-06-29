@@ -88,6 +88,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    print(f"Botón pulsado: {query.data}")
+
     user_id = query.from_user.id
 
     # NUEVO APORTE
