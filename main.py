@@ -24,7 +24,7 @@ def main():
     print("🔥 CallbackQueryHandler REGISTRADO")
     app.add_handler(CallbackQueryHandler(buttons))
 
-    app.add_handler(MessageHandler(filters.ALL, mensajes))
+    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.Document.ALL, mensajes))
 
     print("🤖 KikuAportes v1.0 activo")
 
