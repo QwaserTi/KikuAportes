@@ -126,12 +126,18 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         comentario = aporte["comentario"]
         archivos = aporte["archivos"]
+        total_archivos = len(archivos)
 
         texto = (
-            f"📥 NUEVO APORTE\n\n"
-            f"👤 Usuario: {user_id}\n"
-            f"💬 {comentario or 'Sin comentario'}"
-        )
+    "📥 NUEVO APORTE\n"
+    "━━━━━━━━━━━━━━\n\n"
+    f"👤 Nombre: {user.full_name}\n"
+    f"🔗 Username: {username}\n"
+    f"🆔 ID: {user.id}\n"
+    f"👤 Perfil: tg://user?id={user.id}\n\n"
+    f"📎 Archivos: {total_archivos}\n\n"
+    f"💬 {comentario or 'Sin comentario'}"
+)
 
         topic_id = await get_or_create_topic(context)
 
