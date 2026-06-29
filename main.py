@@ -20,6 +20,9 @@ service = AporteService()
 TOPIC_FILE = "topics.json"
 
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 # ---------------- TOPIC SYSTEM ----------------
 def load_topics():
     if os.path.exists(TOPIC_FILE):
@@ -117,6 +120,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ENVIAR
     elif query.data == "enviar_aporte":
+    print("DEBUG: ENVIAR APORTE PRESIONADO")
 
         aporte = service.get(user_id)
 
