@@ -18,6 +18,10 @@ def menu_enviar():
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    print("🟢 HANDLER BUTTONS EJECUTADO")
+
+    query = update.callback_query
+
     query = update.callback_query
     await query.answer()
 
