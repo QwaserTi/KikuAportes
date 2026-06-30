@@ -2,22 +2,27 @@ from datetime import datetime
 
 
 class AporteService:
+
     def __init__(self):
+
         self.usuarios = {}
-        self.timers = {}
         self.version = {}
 
-    # ---------------- APORTE ----------------
+    # -------------------------------------------------
+    # APORTE
+    # -------------------------------------------------
 
     def iniciar_aporte(self, user_id):
+
         self.usuarios[user_id] = {
             "estado": "WAITING_COMMENT",
             "comentario": "",
-            "archivos": [],          # archivos sueltos
-            "albums": {},           # 🔥 NUEVO: álbumes separados
+            "archivos": [],          # archivos individuales
+            "albums": {},            # media_group_id -> lista de archivos
             "inicio": datetime.now(),
             "status_message_id": None
         }
+
         self.version[user_id] = 0
 
     def existe_aporte(self, user_id):
@@ -26,94 +31,131 @@ class AporteService:
     def get(self, user_id):
         return self.usuarios.get(user_id)
 
-    # ---------------- COMENTARIO ----------------
+    # -------------------------------------------------
+    # COMENTARIO
+    # -------------------------------------------------
 
     def set_comentario(self, user_id, comentario):
+
         aporte = self.get(user_id)
-        if not aporte:
+
+        if aporte is None:
             return
+
         aporte["comentario"] = comentario
         aporte["estado"] = "WAITING_MEDIA"
 
-    # ---------------- ARCHIVOS SUELTOS ----------------
+    # -------------------------------------------------
+    # ARCHIVOS SUELTOS
+    # -------------------------------------------------
 
     def agregar_archivo(self, user_id, file_id, tipo):
+
         aporte = self.get(user_id)
-        if not aporte:
+
+        if aporte is None:
             return
 
         aporte["archivos"].append({
-            "file_id": file_id,
-            "tipo": tipo
+            "tipo": tipo,
+            "file_id": file_id
         })
 
-    # ---------------- ÁLBUMES ----------------
+    # -------------------------------------------------
+    # ÁLBUMES
+    # -------------------------------------------------
 
-    def agregar_album_archivo(self, user_id, album_id, file_id, tipo):
-        """
-        🔥 Guarda archivos agrupados por media_group_id
-        """
+    def agregar_album_archivo(self, user_id, media_group_id, file_id, tipo):
 
         aporte = self.get(user_id)
-        if not aporte:
+
+        if aporte is None:
             return
 
-        if album_id not in aporte["albums"]:
-            aporte["albums"][album_id] = []
+        if media_group_id not in aporte["albums"]:
+            aporte["albums"][media_group_id] = []
 
-        aporte["albums"][album_id].append({
-            "file_id": file_id,
-            "tipo": tipo
+        aporte["albums"][media_group_id].append({
+            "tipo": tipo,
+            "file_id": file_id
         })
 
-    # ---------------- CONTADORES ----------------
+    # -------------------------------------------------
+    # CONTADORES
+    # -------------------------------------------------
 
     def contar_archivos(self, user_id):
+
         aporte = self.get(user_id)
-        if not aporte:
-            return {"photo": 0, "video": 0, "document": 0, "audio": 0}
 
-        contador = {"photo": 0, "video": 0, "document": 0, "audio": 0}
+        contador = {
+            "photo": 0,
+            "video": 0,
+            "document": 0,
+            "audio": 0
+        }
 
-        # sueltos
-        for a in aporte["archivos"]:
-            if a["tipo"] in contador:
-                contador[a["tipo"]] += 1
+        if aporte is None:
+            return contador
 
-        # álbumes
+        for archivo in aporte["archivos"]:
+
+            if archivo["tipo"] in contador:
+                contador[archivo["tipo"]] += 1
+
         for album in aporte["albums"].values():
-            for a in album:
-                if a["tipo"] in contador:
-                    contador[a["tipo"]] += 1
+
+            for archivo in album:
+
+                if archivo["tipo"] in contador:
+                    contador[archivo["tipo"]] += 1
 
         return contador
 
-    # ---------------- STATUS MESSAGE ----------------
+    # -------------------------------------------------
+    # PANEL
+    # -------------------------------------------------
 
     def get_status_message(self, user_id):
-        a = self.get(user_id)
-        return a["status_message_id"] if a else None
+
+        aporte = self.get(user_id)
+
+        if aporte is None:
+            return None
+
+        return aporte["status_message_id"]
 
     def set_status_message(self, user_id, message_id):
-        a = self.get(user_id)
-        if a:
-            a["status_message_id"] = message_id
 
-    # ---------------- VERSION (DEBOUNCE) ----------------
+        aporte = self.get(user_id)
+
+        if aporte is None:
+            return
+
+        aporte["status_message_id"] = message_id
+
+    # -------------------------------------------------
+    # DEBOUNCE
+    # -------------------------------------------------
 
     def bump_version(self, user_id):
+
         self.version[user_id] = self.version.get(user_id, 0) + 1
+
         return self.version[user_id]
 
     def get_version(self, user_id):
+
         return self.version.get(user_id, 0)
 
-    # ---------------- CLEAN ----------------
+    # -------------------------------------------------
+    # LIMPIEZA
+    # -------------------------------------------------
 
     def limpiar(self, user_id):
+
         self.usuarios.pop(user_id, None)
         self.version.pop(user_id, None)
-        self.timers.pop(user_id, None)
 
 
 service = AporteService()
