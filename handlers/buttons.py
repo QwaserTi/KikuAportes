@@ -1,4 +1,10 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputMediaPhoto,
+    InputMediaVideo
+)
 from telegram.ext import ContextTypes
 
 from config import GROUP_ID, FRIEND_ID
@@ -13,28 +19,6 @@ def menu_enviar():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
     ])
-
-
-def build_panel(aporte):
-    contador = service.contar_archivos(aporte["user_id"])
-
-    total = (
-        contador["photo"] +
-        contador["video"] +
-        contador["document"] +
-        contador["audio"]
-    )
-
-    return (
-        "📥 NUEVO APORTE\n"
-        "━━━━━━━━━━━━━━\n\n"
-        f"💬 Comentario: {'✅' if aporte['comentario'] else '❌'}\n\n"
-        f"📷 Fotos: {contador['photo']}\n"
-        f"🎥 Videos: {contador['video']}\n"
-        f"📄 Documentos: {contador['document']}\n"
-        f"🎵 Audio: {contador['audio']}\n\n"
-        f"📎 Total: {total}"
-    )
 
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -105,22 +89,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💬 {aporte['comentario'] or 'Sin comentario'}"
         )
 
+        # =====================================================
+        # 📤 ENVIAR TEXTO
+        # =====================================================
         await context.bot.send_message(chat_id=FRIEND_ID, text=texto)
         await context.bot.send_message(chat_id=GROUP_ID, text=texto)
 
-        for archivo in aporte["archivos"]:
-
-            tipo = archivo["tipo"]
-
-            if tipo == "photo":
-                await context.bot.send_photo(GROUP_ID, archivo["file_id"])
-            elif tipo == "video":
-                await context.bot.send_video(GROUP_ID, archivo["file_id"])
-            elif tipo == "document":
-                await context.bot.send_document(GROUP_ID, archivo["file_id"])
-            elif tipo == "audio":
-                await context.bot.send_audio(GROUP_ID, archivo["file_id"])
-
-        service.limpiar(user_id)
-
-        await query.edit_message_text("✅ Aporte enviado correctamente")
+        # =====================================================
+        # 📦 ENVIAR MEDIA (ÁLBUM REAL)
+        # =====================================================
+        media
