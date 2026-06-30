@@ -3,7 +3,9 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
-    InputMediaVideo
+    InputMediaVideo,
+    InputMediaDocument,
+    InputMediaAudio
 )
 from telegram.ext import ContextTypes
 
@@ -72,6 +74,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("⚠️ No hay aporte activo.")
             return
 
+        archivos = aporte.get("archivos", [])
+
         contador = service.contar_archivos(user_id)
 
         user = query.from_user
@@ -96,6 +100,54 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=GROUP_ID, text=texto)
 
         # =====================================================
-        # 📦 ENVIAR MEDIA (ÁLBUM REAL)
+        # 📦 ENVIAR MEDIA (ÁLBUM + SUELTOS BIEN MANEJADO)
         # =====================================================
-        media
+
+        if archivos:
+
+            media_group = []
+
+            for archivo in archivos:
+
+                tipo = archivo["tipo"]
+                fid = archivo["file_id"]
+
+                if tipo == "photo":
+                    media_group.append(InputMediaPhoto(media=fid))
+
+                elif tipo == "video":
+                    media_group.append(InputMediaVideo(media=fid))
+
+                elif tipo == "document":
+                    media_group.append(InputMediaDocument(media=fid))
+
+                elif tipo == "audio":
+                    media_group.append(InputMediaAudio(media=fid))
+
+            # Telegram permite máximo 10 por álbum
+            chunks = [media_group[i:i+10] for i in range(0, len(media_group), 10)]
+
+            for chunk in chunks:
+                if len(chunk) == 1:
+                    # si solo hay 1 archivo, enviar normal
+                    m = chunk[0]
+                    if isinstance(m, InputMediaPhoto):
+                        await context.bot.send_photo(GROUP_ID, m.media)
+                    elif isinstance(m, InputMediaVideo):
+                        await context.bot.send_video(GROUP_ID, m.media)
+                    elif isinstance(m, InputMediaDocument):
+                        await context.bot.send_document(GROUP_ID, m.media)
+                    elif isinstance(m, InputMediaAudio):
+                        await context.bot.send_audio(GROUP_ID, m.media)
+                else:
+                    await context.bot.send_media_group(
+                        chat_id=GROUP_ID,
+                        media=chunk
+                    )
+
+        # =====================================================
+        # 🧹 LIMPIEZA FINAL SEGURA
+        # =====================================================
+        service.limpiar(user_id)
+
+        await query.edit_message_text("✅ Aporte enviado correctamente")
