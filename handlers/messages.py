@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram import InputMediaPhoto, InputMediaVideo
 
 import asyncio
 from collections import defaultdict
@@ -13,7 +14,6 @@ def menu_enviar():
     ])
 
 
-# 🔥 BUFFER PARA ÁLBUMES
 album_buffer = defaultdict(list)
 album_tasks = {}
 
@@ -30,7 +30,6 @@ async def procesar_panel(user_id, context, update, version):
         return
 
     contador = service.contar_archivos(user_id)
-
     total = sum(contador.values())
 
     texto = (
@@ -45,14 +44,11 @@ async def procesar_panel(user_id, context, update, version):
         "Pulsa 📤 Enviar aporte cuando termines."
     )
 
-    old_msg_id = service.get_status_message(user_id)
+    old_msg = service.get_status_message(user_id)
 
-    if old_msg_id:
+    if old_msg:
         try:
-            await context.bot.delete_message(
-                chat_id=update.message.chat_id,
-                message_id=old_msg_id
-            )
+            await context.bot.delete_message(update.message.chat_id, old_msg)
         except:
             pass
 
@@ -71,10 +67,9 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.message.from_user.id
-
     aporte = service.get(user_id)
 
-    if aporte is None:
+    if not aporte:
         return
 
     estado = aporte["estado"]
@@ -82,18 +77,14 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---------------- COMENTARIO ----------------
     if estado == "WAITING_COMMENT":
 
-        comentario = update.message.text or ""
-
-        service.set_comentario(user_id, comentario)
+        service.set_comentario(user_id, update.message.text or "")
 
         await update.message.reply_text(
-            "📷 Ahora envía tus archivos.\n\nPuedes enviar fotos, videos, documentos o audios.",
+            "📷 Envía tus archivos.\nPuedes mandar fotos, videos, documentos o audios.",
             reply_markup=menu_enviar()
         )
-
         return
 
-    # ---------------- SOLO MEDIA ----------------
     if estado != "WAITING_MEDIA":
         return
 
@@ -101,7 +92,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     media_group_id = msg.media_group_id
 
     # =====================================================
-    # 🔥 1. DETECCIÓN DE ÁLBUM
+    # 📦 ÁLBUM
     # =====================================================
     if media_group_id:
 
@@ -113,37 +104,41 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1.5)
 
             messages = album_buffer.pop(key, [])
-
             if not messages:
                 return
 
-            # guardar archivos del álbum
-            for m in messages:
+            media = []
 
+            for m in messages:
                 if m.photo:
-                    service.agregar_archivo(user_id, m.photo[-1].file_id, "photo")
+                    fid = m.photo[-1].file_id
+                    service.agregar_archivo(user_id, fid, "photo")
+                    media.append(InputMediaPhoto(fid))
 
                 elif m.video:
-                    service.agregar_archivo(user_id, m.video.file_id, "video")
+                    fid = m.video.file_id
+                    service.agregar_archivo(user_id, fid, "video")
+                    media.append(InputMediaVideo(fid))
 
-            # actualizar panel UNA sola vez
+            if media:
+                await context.bot.send_media_group(
+                    chat_id=update.message.chat_id,
+                    media=media
+                )
+
             version = service.bump_version(user_id)
             await procesar_panel(user_id, context, update, version)
 
-        # cancelar tarea previa del mismo álbum
-        old_task = album_tasks.get(key)
-        if old_task and not old_task.done():
-            old_task.cancel()
+        old = album_tasks.get(key)
+        if old:
+            old.cancel()
 
-        task = asyncio.create_task(procesar_album())
-        album_tasks[key] = task
-
+        album_tasks[key] = asyncio.create_task(procesar_album())
         return
 
     # =====================================================
-    # 🔥 2. MEDIA NORMAL (NO ÁLBUM)
+    # 📎 ARCHIVO NORMAL
     # =====================================================
-
     if msg.photo:
         service.agregar_archivo(user_id, msg.photo[-1].file_id, "photo")
 
@@ -159,10 +154,5 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         return
 
-    # =====================================================
-    # 🔥 3. DEBOUNCE NORMAL
-    # =====================================================
-
     version = service.bump_version(user_id)
-
     asyncio.create_task(procesar_panel(user_id, context, update, version))
