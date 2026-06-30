@@ -13,7 +13,8 @@ class AporteService:
         self.usuarios[user_id] = {
             "estado": "WAITING_COMMENT",
             "comentario": "",
-            "archivos": [],
+            "archivos": [],          # archivos sueltos
+            "albums": {},           # 🔥 NUEVO: álbumes separados
             "inicio": datetime.now(),
             "status_message_id": None
         }
@@ -34,7 +35,7 @@ class AporteService:
         aporte["comentario"] = comentario
         aporte["estado"] = "WAITING_MEDIA"
 
-    # ---------------- ARCHIVOS ----------------
+    # ---------------- ARCHIVOS SUELTOS ----------------
 
     def agregar_archivo(self, user_id, file_id, tipo):
         aporte = self.get(user_id)
@@ -46,6 +47,27 @@ class AporteService:
             "tipo": tipo
         })
 
+    # ---------------- ÁLBUMES ----------------
+
+    def agregar_album_archivo(self, user_id, album_id, file_id, tipo):
+        """
+        🔥 Guarda archivos agrupados por media_group_id
+        """
+
+        aporte = self.get(user_id)
+        if not aporte:
+            return
+
+        if album_id not in aporte["albums"]:
+            aporte["albums"][album_id] = []
+
+        aporte["albums"][album_id].append({
+            "file_id": file_id,
+            "tipo": tipo
+        })
+
+    # ---------------- CONTADORES ----------------
+
     def contar_archivos(self, user_id):
         aporte = self.get(user_id)
         if not aporte:
@@ -53,9 +75,16 @@ class AporteService:
 
         contador = {"photo": 0, "video": 0, "document": 0, "audio": 0}
 
+        # sueltos
         for a in aporte["archivos"]:
             if a["tipo"] in contador:
                 contador[a["tipo"]] += 1
+
+        # álbumes
+        for album in aporte["albums"].values():
+            for a in album:
+                if a["tipo"] in contador:
+                    contador[a["tipo"]] += 1
 
         return contador
 
