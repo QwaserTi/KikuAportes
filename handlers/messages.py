@@ -1,6 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from telegram import InputMediaPhoto, InputMediaVideo
 
 import asyncio
 from collections import defaultdict
@@ -14,13 +13,17 @@ def menu_enviar():
     ])
 
 
-album_buffer = defaultdict(list)
+# =====================================================
+# BUFFERS
+# =====================================================
+album_buffer = defaultdict(dict)  # msg_id -> msg
+album_groups = defaultdict(set)   # (user, group_id) -> set(msg_ids)
 album_tasks = {}
 panel_tasks = {}
 
 
 # =====================================================
-# PANEL (ANTI-DUPLICADOS + ESTABLE)
+# PANEL
 # =====================================================
 async def procesar_panel(user_id, context, chat_id, version):
 
@@ -67,7 +70,7 @@ async def procesar_panel(user_id, context, chat_id, version):
 
 
 # =====================================================
-# MAIN HANDLER
+# MAIN
 # =====================================================
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -101,20 +104,28 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     media_group_id = msg.media_group_id
 
     # =====================================================
-    # 📦 ÁLBUM (SIN REENVIAR AL CHAT)
+    # 📦 ÁLBUM (ROBUSTO)
     # =====================================================
     if media_group_id:
 
         key = (user_id, media_group_id)
-        album_buffer[key].append(msg)
+
+        # evitar duplicados por message_id
+        if msg.message_id in album_buffer:
+            return
+
+        album_buffer[msg.message_id] = msg
+        album_groups[key].add(msg.message_id)
 
         async def procesar_album():
 
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(1.5)
 
-            messages = album_buffer.pop(key, [])
-            if not messages:
+            ids = list(album_groups.pop(key, set()))
+            if not ids:
                 return
+
+            messages = [album_buffer.pop(i) for i in ids if i in album_buffer]
 
             for m in messages:
                 if m.photo:
@@ -152,7 +163,6 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     version = service.bump_version(user_id)
 
-    # cancelar panel anterior si existe
     old_task = panel_tasks.get(user_id)
     if old_task:
         old_task.cancel()
