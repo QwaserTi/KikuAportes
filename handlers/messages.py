@@ -1,5 +1,5 @@
 import asyncio
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from services.aporte_manager import manager
@@ -32,23 +32,21 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================
     # 📝 COMENTARIO
     # =====================================================
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    if estado == "WAITING_COMMENT":
 
-if estado == "WAITING_COMMENT":
+        manager.set_comentario(user_id, msg.text or "")
 
-    manager.set_comentario(user_id, msg.text or "")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
+        ])
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
-    ])
+        await msg.reply_text(
+            "📷 Ahora envía tus archivos.\n\n"
+            "Cuando termines, pulsa el botón para enviar tu aporte.",
+            reply_markup=keyboard
+        )
 
-    await msg.reply_text(
-        "📷 Ahora envía tus archivos.\n\n"
-        "Cuando termines, pulsa el botón para enviar tu aporte.",
-        reply_markup=keyboard
-    )
-
-    return
+        return
 
     if estado != "WAITING_MEDIA":
         return
