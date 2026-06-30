@@ -1,8 +1,13 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from services.aporte_service import service
-from handlers.buttons import menu_enviar
+
+
+def menu_enviar():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
+    ])
 
 
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -26,9 +31,9 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         service.set_comentario(user_id, comentario)
 
-        # crear panel inicial (YA EXISTE EN BUTTONS, solo actualizamos estado)
         await update.message.reply_text(
-            "📷 Ahora envía tus archivos.\n\nPuedes enviar fotos, videos, documentos o audios.",
+            "📷 Ahora envía tus archivos.\n\nPuedes enviar fotos, videos, documentos o audios.\n"
+            "El panel se actualizará automáticamente.",
             reply_markup=menu_enviar()
         )
 
@@ -40,6 +45,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = update.message
 
+    # ---------------- GUARDAR ARCHIVO ----------------
     if msg.photo:
         service.agregar_archivo(user_id, msg.photo[-1].file_id, "photo")
 
@@ -54,3 +60,49 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     else:
         return
+
+    # ---------------- ACTUALIZAR PANEL (OPCIÓN 3) ----------------
+
+    contador = service.contar_archivos(user_id)
+
+    total = (
+        contador["photo"] +
+        contador["video"] +
+        contador["document"] +
+        contador["audio"]
+    )
+
+    aporte = service.get(user_id)
+
+    texto = (
+        "📥 <b>Aporte en progreso</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        f"💬 Comentario: {'✅' if aporte['comentario'] else '❌'}\n\n"
+        f"📷 Fotos: {contador['photo']}\n"
+        f"🎥 Videos: {contador['video']}\n"
+        f"📄 Documentos: {contador['document']}\n"
+        f"🎵 Audios: {contador['audio']}\n\n"
+        f"📎 Total: {total}\n\n"
+        "Pulsa 📤 Enviar aporte cuando termines."
+    )
+
+    old_msg_id = service.get_status_message(user_id)
+
+    # borrar mensaje anterior si existe
+    if old_msg_id:
+        try:
+            await context.bot.delete_message(
+                chat_id=update.message.chat_id,
+                message_id=old_msg_id
+            )
+        except:
+            pass
+
+    # crear nuevo mensaje actualizado
+    new_msg = await update.message.reply_text(
+        texto,
+        reply_markup=menu_enviar(),
+        parse_mode="HTML"
+    )
+
+    service.set_status_message(user_id, new_msg.message_id)
