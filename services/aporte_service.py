@@ -10,7 +10,8 @@ class AporteService:
             "estado": "WAITING_COMMENT",
             "comentario": "",
             "archivos": [],
-            "inicio": datetime.now()
+            "inicio": datetime.now(),
+            "status_message_id": None
         }
 
     def existe_aporte(self, user_id):
@@ -62,6 +63,22 @@ class AporteService:
                 contador[tipo] += 1
 
         return contador
+
+    # ---------------- MENSAJE DE ESTADO ----------------
+
+    def get_status_message(self, user_id):
+        aporte = self.get(user_id)
+        if not aporte:
+            return None
+
+        return aporte["status_message_id"]
+
+    def set_status_message(self, user_id, message_id):
+        aporte = self.get(user_id)
+        if not aporte:
+            return
+
+        aporte["status_message_id"] = message_id
 
     def limpiar(self, user_id):
         self.usuarios.pop(user_id, None)
