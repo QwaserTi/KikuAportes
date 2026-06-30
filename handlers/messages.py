@@ -6,6 +6,8 @@ from services.aporte_service import service
 
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    print("📩 mensajes() ejecutado")
+
     if update.message is None:
         return
 
