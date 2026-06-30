@@ -1,6 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+import asyncio
+
 from services.aporte_service import service
 
 
@@ -32,8 +34,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         service.set_comentario(user_id, comentario)
 
         await update.message.reply_text(
-            "📷 Ahora envía tus archivos.\n\nPuedes enviar fotos, videos, documentos o audios.\n"
-            "El panel se actualizará automáticamente.",
+            "📷 Ahora envía tus archivos.\n\nPuedes enviar fotos, videos, documentos o audios.",
             reply_markup=menu_enviar()
         )
 
@@ -45,7 +46,6 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = update.message
 
-    # ---------------- GUARDAR ARCHIVO ----------------
     if msg.photo:
         service.agregar_archivo(user_id, msg.photo[-1].file_id, "photo")
 
@@ -61,48 +61,56 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         return
 
-    # ---------------- ACTUALIZAR PANEL (OPCIÓN 3) ----------------
+    # ---------------- DEBOUNCE SYSTEM ----------------
 
-    contador = service.contar_archivos(user_id)
+    async def update_panel():
 
-    total = (
-        contador["photo"] +
-        contador["video"] +
-        contador["document"] +
-        contador["audio"]
-    )
+        await asyncio.sleep(2)
 
-    aporte = service.get(user_id)
+        current = service.get(user_id)
+        if not current:
+            return
 
-    texto = (
-        "📥 <b>Aporte en progreso</b>\n"
-        "━━━━━━━━━━━━━━\n\n"
-        f"💬 Comentario: {'✅' if aporte['comentario'] else '❌'}\n\n"
-        f"📷 Fotos: {contador['photo']}\n"
-        f"🎥 Videos: {contador['video']}\n"
-        f"📄 Documentos: {contador['document']}\n"
-        f"🎵 Audios: {contador['audio']}\n\n"
-        f"📎 Total: {total}\n\n"
-        "Pulsa 📤 Enviar aporte cuando termines."
-    )
+        contador = service.contar_archivos(user_id)
 
-    old_msg_id = service.get_status_message(user_id)
+        total = (
+            contador["photo"] +
+            contador["video"] +
+            contador["document"] +
+            contador["audio"]
+        )
 
-    # borrar mensaje anterior si existe
-    if old_msg_id:
-        try:
-            await context.bot.delete_message(
-                chat_id=update.message.chat_id,
-                message_id=old_msg_id
-            )
-        except:
-            pass
+        texto = (
+            "📥 <b>Aporte en progreso</b>\n"
+            "━━━━━━━━━━━━━━\n\n"
+            f"💬 Comentario: {'✅' if current['comentario'] else '❌'}\n\n"
+            f"📷 Fotos: {contador['photo']}\n"
+            f"🎥 Videos: {contador['video']}\n"
+            f"📄 Documentos: {contador['document']}\n"
+            f"🎵 Audios: {contador['audio']}\n\n"
+            f"📎 Total: {total}\n\n"
+            "Pulsa 📤 Enviar aporte cuando termines."
+        )
 
-    # crear nuevo mensaje actualizado
-    new_msg = await update.message.reply_text(
-        texto,
-        reply_markup=menu_enviar(),
-        parse_mode="HTML"
-    )
+        old_msg_id = service.get_status_message(user_id)
 
-    service.set_status_message(user_id, new_msg.message_id)
+        if old_msg_id:
+            try:
+                await context.bot.delete_message(
+                    chat_id=update.message.chat_id,
+                    message_id=old_msg_id
+                )
+            except:
+                pass
+
+        new_msg = await update.message.reply_text(
+            texto,
+            reply_markup=menu_enviar(),
+            parse_mode="HTML"
+        )
+
+        service.set_status_message(user_id, new_msg.message_id)
+
+    # cancelar anterior y crear nuevo debounce
+    task = asyncio.create_task(update_panel())
+    service.set_timer(user_id, task)
