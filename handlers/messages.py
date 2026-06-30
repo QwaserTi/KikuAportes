@@ -32,14 +32,23 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================
     # 📝 COMENTARIO
     # =====================================================
-    if estado == "WAITING_COMMENT":
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-        manager.set_comentario(user_id, msg.text or "")
+if estado == "WAITING_COMMENT":
 
-        await msg.reply_text(
-            "📷 Envía tus archivos (fotos, videos, documentos o audios)."
-        )
-        return
+    manager.set_comentario(user_id, msg.text or "")
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
+    ])
+
+    await msg.reply_text(
+        "📷 Ahora envía tus archivos.\n\n"
+        "Cuando termines, pulsa el botón para enviar tu aporte.",
+        reply_markup=keyboard
+    )
+
+    return
 
     if estado != "WAITING_MEDIA":
         return
