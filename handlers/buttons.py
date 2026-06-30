@@ -15,11 +15,29 @@ def menu_enviar():
     ])
 
 
+def build_panel(aporte):
+    contador = service.contar_archivos(aporte["user_id"])
+
+    total = (
+        contador["photo"] +
+        contador["video"] +
+        contador["document"] +
+        contador["audio"]
+    )
+
+    return (
+        "📥 NUEVO APORTE\n"
+        "━━━━━━━━━━━━━━\n\n"
+        f"💬 Comentario: {'✅' if aporte['comentario'] else '❌'}\n\n"
+        f"📷 Fotos: {contador['photo']}\n"
+        f"🎥 Videos: {contador['video']}\n"
+        f"📄 Documentos: {contador['document']}\n"
+        f"🎵 Audio: {contador['audio']}\n\n"
+        f"📎 Total: {total}"
+    )
+
+
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    print("🟢 HANDLER BUTTONS EJECUTADO")
-
-    query = update.callback_query
 
     query = update.callback_query
     await query.answer()
@@ -70,9 +88,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("⚠️ No hay aporte activo.")
             return
 
-        comentario = aporte["comentario"]
-        archivos = aporte["archivos"]
-
         contador = service.contar_archivos(user_id)
 
         user = query.from_user
@@ -83,39 +98,26 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━\n\n"
             f"👤 Nombre: {user.full_name}\n"
             f"🔗 Usuario: {username}\n\n"
-            f"📎 Archivos:\n"
             f"📷 Fotos: {contador['photo']}\n"
             f"🎥 Videos: {contador['video']}\n"
             f"📄 Docs: {contador['document']}\n"
             f"🎵 Audio: {contador['audio']}\n\n"
-            f"💬 {comentario or 'Sin comentario'}"
+            f"💬 {aporte['comentario'] or 'Sin comentario'}"
         )
 
-        # ENVIAR AL AMIGO
-        await context.bot.send_message(
-            chat_id=FRIEND_ID,
-            text=texto
-        )
+        await context.bot.send_message(chat_id=FRIEND_ID, text=texto)
+        await context.bot.send_message(chat_id=GROUP_ID, text=texto)
 
-        # ENVIAR AL GRUPO
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=texto
-        )
-
-        for archivo in archivos:
+        for archivo in aporte["archivos"]:
 
             tipo = archivo["tipo"]
 
             if tipo == "photo":
                 await context.bot.send_photo(GROUP_ID, archivo["file_id"])
-
             elif tipo == "video":
                 await context.bot.send_video(GROUP_ID, archivo["file_id"])
-
             elif tipo == "document":
                 await context.bot.send_document(GROUP_ID, archivo["file_id"])
-
             elif tipo == "audio":
                 await context.bot.send_audio(GROUP_ID, archivo["file_id"])
 
