@@ -2,7 +2,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import asyncio
-
 from services.aporte_service import service
 
 
@@ -61,11 +60,17 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         return
 
-    # ---------------- DEBOUNCE SYSTEM ----------------
+    # ---------------- DEBOUNCE SYSTEM (FIX FINAL) ----------------
 
-    async def update_panel():
+    version = service.bump_version(user_id)
+
+    async def update_panel(my_version: int):
 
         await asyncio.sleep(2)
+
+        # 🔥 si llegaron más archivos después, cancelar ejecución
+        if service.get_version(user_id) != my_version:
+            return
 
         current = service.get(user_id)
         if not current:
@@ -111,6 +116,6 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         service.set_status_message(user_id, new_msg.message_id)
 
-    # cancelar anterior y crear nuevo debounce
-    task = asyncio.create_task(update_panel())
+    # solo 1 task activo lógico (aunque haya cancelaciones internas)
+    task = asyncio.create_task(update_panel(version))
     service.set_timer(user_id, task)
