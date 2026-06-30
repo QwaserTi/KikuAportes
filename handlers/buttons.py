@@ -3,7 +3,6 @@ from telegram.ext import ContextTypes
 
 from config import GROUP_ID, FRIEND_ID
 from services.aporte_service import service
-from handlers.messages import service as msg_service  # misma instancia lógica
 
 import logging
 
