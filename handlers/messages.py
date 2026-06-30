@@ -1,7 +1,17 @@
-from telegram import Update
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
 from telegram.ext import ContextTypes
 
 from services.aporte_service import service
+
+
+def menu_enviar():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
+    ])
 
 
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -30,7 +40,9 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "📷 Ahora envía todas las fotos, videos, documentos o audios que quieras.\n\n"
-            "Cuando termines, pulsa «📤 Enviar aporte»."
+            "Puedes enviar tantos archivos como quieras.\n"
+            "Cuando termines pulsa «📤 Enviar aporte».",
+            reply_markup=menu_enviar()
         )
 
         return
@@ -48,9 +60,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "photo"
         )
 
-        return
-
-    if update.message.video:
+    elif update.message.video:
 
         service.agregar_archivo(
             user_id,
@@ -58,9 +68,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "video"
         )
 
-        return
-
-    if update.message.document:
+    elif update.message.document:
 
         service.agregar_archivo(
             user_id,
@@ -68,9 +76,7 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "document"
         )
 
-        return
-
-    if update.message.audio:
+    elif update.message.audio:
 
         service.agregar_archivo(
             user_id,
@@ -78,4 +84,21 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "audio"
         )
 
+    else:
         return
+
+    contador = service.contar_archivos(user_id)
+
+    total = (
+        contador["photo"] +
+        contador["video"] +
+        contador["document"] +
+        contador["audio"]
+    )
+
+    await update.message.reply_text(
+        f"✅ Archivo recibido.\n\n"
+        f"📎 Archivos acumulados: {total}\n\n"
+        "Puedes seguir enviando archivos o pulsar «📤 Enviar aporte».",
+        reply_markup=menu_enviar()
+    )
