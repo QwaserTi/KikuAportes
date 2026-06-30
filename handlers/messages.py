@@ -1,9 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from services.aporte_service import AporteService
-
-service = AporteService()
+from services.aporte_service import service
 
 
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
