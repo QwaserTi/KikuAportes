@@ -22,7 +22,13 @@ def main():
     app.add_handler(CommandHandler("start", start))
 
     print("🔥 CallbackQueryHandler REGISTRADO")
-    app.add_handler(CallbackQueryHandler(buttons))
+
+    app.add_handler(
+    CallbackQueryHandler(
+        buttons,
+        pattern="^(nuevo_aporte|skip_comment|enviar_aporte)$"
+    )
+)
 
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.Document.ALL, mensajes))
 
