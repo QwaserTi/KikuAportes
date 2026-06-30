@@ -16,9 +16,13 @@ def menu_enviar():
 
 album_buffer = defaultdict(list)
 album_tasks = {}
+panel_tasks = {}
 
 
-async def procesar_panel(user_id, context, update, version):
+# =====================================================
+# PANEL (ANTI-DUPLICADOS + ESTABLE)
+# =====================================================
+async def procesar_panel(user_id, context, chat_id, version):
 
     await asyncio.sleep(2)
 
@@ -48,12 +52,13 @@ async def procesar_panel(user_id, context, update, version):
 
     if old_msg:
         try:
-            await context.bot.delete_message(update.message.chat_id, old_msg)
+            await context.bot.delete_message(chat_id=chat_id, message_id=old_msg)
         except:
             pass
 
-    new_msg = await update.message.reply_text(
-        texto,
+    new_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=texto,
         reply_markup=menu_enviar(),
         parse_mode="HTML"
     )
@@ -61,25 +66,30 @@ async def procesar_panel(user_id, context, update, version):
     service.set_status_message(user_id, new_msg.message_id)
 
 
+# =====================================================
+# MAIN HANDLER
+# =====================================================
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if update.message is None:
+    if not update.message:
         return
 
     user_id = update.message.from_user.id
-    aporte = service.get(user_id)
+    chat_id = update.message.chat_id
 
+    aporte = service.get(user_id)
     if not aporte:
         return
 
     estado = aporte["estado"]
+    msg = update.message
 
     # ---------------- COMENTARIO ----------------
     if estado == "WAITING_COMMENT":
 
-        service.set_comentario(user_id, update.message.text or "")
+        service.set_comentario(user_id, msg.text or "")
 
-        await update.message.reply_text(
+        await msg.reply_text(
             "📷 Envía tus archivos.\nPuedes mandar fotos, videos, documentos o audios.",
             reply_markup=menu_enviar()
         )
@@ -88,11 +98,10 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if estado != "WAITING_MEDIA":
         return
 
-    msg = update.message
     media_group_id = msg.media_group_id
 
     # =====================================================
-    # 📦 ÁLBUM
+    # 📦 ÁLBUM (SIN REENVIAR AL CHAT)
     # =====================================================
     if media_group_id:
 
@@ -101,33 +110,20 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         async def procesar_album():
 
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.2)
 
             messages = album_buffer.pop(key, [])
             if not messages:
                 return
 
-            media = []
-
             for m in messages:
                 if m.photo:
-                    fid = m.photo[-1].file_id
-                    service.agregar_archivo(user_id, fid, "photo")
-                    media.append(InputMediaPhoto(fid))
-
+                    service.agregar_archivo(user_id, m.photo[-1].file_id, "photo")
                 elif m.video:
-                    fid = m.video.file_id
-                    service.agregar_archivo(user_id, fid, "video")
-                    media.append(InputMediaVideo(fid))
-
-            if media:
-                await context.bot.send_media_group(
-                    chat_id=update.message.chat_id,
-                    media=media
-                )
+                    service.agregar_archivo(user_id, m.video.file_id, "video")
 
             version = service.bump_version(user_id)
-            await procesar_panel(user_id, context, update, version)
+            await procesar_panel(user_id, context, chat_id, version)
 
         old = album_tasks.get(key)
         if old:
@@ -155,4 +151,12 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     version = service.bump_version(user_id)
-    asyncio.create_task(procesar_panel(user_id, context, update, version))
+
+    # cancelar panel anterior si existe
+    old_task = panel_tasks.get(user_id)
+    if old_task:
+        old_task.cancel()
+
+    panel_tasks[user_id] = asyncio.create_task(
+        procesar_panel(user_id, context, chat_id, version)
+    )
