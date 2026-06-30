@@ -10,7 +10,7 @@ from config import BOT_TOKEN
 
 # handlers
 from handlers.start import start
-from handlers.buttons import buttons
+from handlers.callbacks import buttons
 from handlers.messages import mensajes
 
 
@@ -18,21 +18,32 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # ---------------- HANDLERS ----------------
+    # ---------------- START ----------------
     app.add_handler(CommandHandler("start", start))
 
     print("🔥 CallbackQueryHandler REGISTRADO")
 
+    # ---------------- CALLBACKS ----------------
     app.add_handler(
-    CallbackQueryHandler(
-        buttons,
-        pattern="^(nuevo_aporte|skip_comment|enviar_aporte)$"
+        CallbackQueryHandler(
+            buttons,
+            pattern="^(nuevo_aporte|enviar_aporte)$"
+        )
     )
-)
 
-    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.Document.ALL, mensajes))
+    # ---------------- MENSAJES ----------------
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT |
+            filters.PHOTO |
+            filters.VIDEO |
+            filters.AUDIO |
+            filters.Document.ALL,
+            mensajes
+        )
+    )
 
-    print("🤖 KikuAportes v1.0 activo")
+    print("🤖 KikuAportes 2.0 activo")
 
     app.run_polling()
 
