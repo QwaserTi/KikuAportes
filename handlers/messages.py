@@ -1,15 +1,11 @@
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from services.aporte_manager import manager
 from core.album_buffer import AlbumBuffer
 from core.panel_manager import PanelManager
 
-
-# -------------------------
-# INSTANCIAS GLOBALES
-# -------------------------
 album = AlbumBuffer()
 panel = PanelManager()
 
@@ -29,23 +25,16 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     estado = aporte.estado
 
-    # =====================================================
-    # 📝 COMENTARIO
-    # =====================================================
+    # -------------------------
+    # COMENTARIO
+    # -------------------------
     if estado == "WAITING_COMMENT":
 
         manager.set_comentario(user_id, msg.text or "")
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
-        ])
-
         await msg.reply_text(
-            "📷 Ahora envía tus archivos.\n\n"
-            "Cuando termines, pulsa el botón para enviar tu aporte.",
-            reply_markup=keyboard
+            "📷 Ahora envía tus archivos.\n\nCuando termines pulsa 'Enviar aporte'."
         )
-
         return
 
     if estado != "WAITING_MEDIA":
@@ -53,9 +42,9 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     media_group_id = msg.media_group_id
 
-    # =====================================================
-    # 📦 ALBUM (GRUPOS)
-    # =====================================================
+    # -------------------------
+    # ALBUM
+    # -------------------------
     if media_group_id:
 
         key = (user_id, media_group_id)
@@ -64,41 +53,23 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         async def procesar_album():
 
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(1.5)
 
             messages = album.pop_group(key)
 
             for m in messages:
+
                 if m.photo:
-                    manager.agregar_archivo(
-                        user_id,
-                        m.photo[-1].file_id,
-                        "photo"
-                    )
+                    manager.agregar_archivo(user_id, m.photo[-1].file_id, "photo")
 
                 elif m.video:
-                    manager.agregar_album(
-                        user_id,
-                        media_group_id,
-                        m.video.file_id,
-                        "video"
-                    )
+                    manager.agregar_archivo(user_id, m.video.file_id, "video")
 
                 elif m.document:
-                    manager.agregar_album(
-                        user_id,
-                        media_group_id,
-                        m.document.file_id,
-                        "document"
-                    )
+                    manager.agregar_archivo(user_id, m.document.file_id, "document")
 
                 elif m.audio:
-                    manager.agregar_album(
-                        user_id,
-                        media_group_id,
-                        m.audio.file_id,
-                        "audio"
-                    )
+                    manager.agregar_archivo(user_id, m.audio.file_id, "audio")
 
             await panel.render(user_id, context, chat_id, version=1)
 
@@ -108,9 +79,9 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # =====================================================
-    # 📎 ARCHIVO INDIVIDUAL
-    # =====================================================
+    # -------------------------
+    # ARCHIVO INDIVIDUAL
+    # -------------------------
     if msg.photo:
         manager.agregar_archivo(user_id, msg.photo[-1].file_id, "photo")
 
@@ -122,8 +93,5 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif msg.audio:
         manager.agregar_archivo(user_id, msg.audio.file_id, "audio")
-
-    else:
-        return
 
     await panel.render(user_id, context, chat_id, version=1)
