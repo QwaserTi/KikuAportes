@@ -35,7 +35,7 @@ class PanelManager:
         user_id,
         context,
         chat_id,
-        delay=2.0,
+        delay=1.0,
     ):
         """
         Espera a que el usuario deje de enviar archivos.
