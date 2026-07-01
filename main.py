@@ -1,3 +1,4 @@
+print("🔥 MAIN.PY INICIADO")
 from telegram.ext import (
     Application,
     CommandHandler,
