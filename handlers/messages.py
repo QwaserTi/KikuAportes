@@ -8,44 +8,63 @@ from services.aporte_manager import manager
 def detectar_tipo(msg: Message):
     if msg.photo:
         return "photo"
+
     if msg.video:
         return "video"
+
     if msg.document:
         return "document"
+
     if msg.audio:
         return "audio"
+
     return None
 
 
-async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def mensajes(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     msg = update.message
+
     if not msg or not msg.from_user:
         return
 
     user_id = msg.from_user.id
     aporte = manager.get_active(user_id)
+
     if not aporte:
         return
 
     if aporte.sending:
-        await msg.reply_text("⏳ Tu aporte se está enviando. Espera a que termine.")
+        await msg.reply_text(
+            "⏳ Tu aporte se está enviando. Espera a que termine."
+        )
         return
 
     if aporte.estado == "DELIVERY_FAILED":
         await msg.reply_text(
-            "⚠️ Hay un envío pendiente. Pulsa «Reintentar envío» antes de "
-            "añadir otro aporte."
+            "⚠️ Hay un envío pendiente. Pulsa «Reintentar envío» "
+            "antes de añadir otro aporte."
         )
         return
 
     tipo = detectar_tipo(msg)
 
-    # El comentario es opcional. Si llega un archivo mientras se esperaba el
-    # comentario, se interpreta como que el usuario decidió omitirlo.
+    # Si el usuario envía media mientras se esperaba el comentario,
+    # se interpreta que decidió omitirlo.
     if aporte.estado == "WAITING_COMMENT":
         if msg.text:
-            manager.set_comentario(user_id, msg.text)
-            await panel.render(user_id, context, msg.chat_id)
+            manager.set_comentario(
+                user_id,
+                msg.text,
+            )
+
+            await panel.render(
+                user_id,
+                context,
+                msg.chat_id,
+            )
             return
 
         if tipo:
@@ -59,8 +78,8 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not tipo:
         if msg.text:
             await msg.reply_text(
-                "ℹ️ El comentario ya está guardado. Ahora envía fotos, videos, "
-                "documentos o audios."
+                "ℹ️ El comentario ya está guardado. Ahora envía "
+                "fotos, videos, documentos o audios."
             )
         return
 
@@ -73,7 +92,11 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if agregado:
-        # Los mensajes de un álbum llegan como actualizaciones separadas. El
-        # panel se agrupa con un pequeño debounce, pero cada mensaje se guarda
-        # inmediatamente y en el envío se ordena por message_id.
-        panel.schedule(user_id, context, msg.chat_id)
+        # Cada archivo reinicia el temporizador. Dos segundos después
+        # del último archivo, el panel se coloca debajo de toda la media.
+        panel.schedule(
+            user_id=user_id,
+            context=context,
+            chat_id=msg.chat_id,
+            delay=2.0,
+        )
