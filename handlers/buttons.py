@@ -1,26 +1,13 @@
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    InputMediaPhoto,
-    InputMediaVideo,
-    InputMediaDocument,
-    InputMediaAudio
-)
+from telegram import Update, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
 from telegram.ext import ContextTypes
 
 from config import GROUP_ID, FRIEND_ID
-from services.aporte_service import service
-
-import logging
-
-logger = logging.getLogger(__name__)
+from services.aporte_manager import manager
 
 
-def menu_enviar():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📤 Enviar aporte", callback_data="enviar_aporte")]
-    ])
+def chunk_list(lst, size=10):
+    for i in range(0, len(lst), size):
+        yield lst[i:i + size]
 
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -31,123 +18,98 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
-    logger.info(f"Botón pulsado: {data}")
-
-    # ---------------- NUEVO APORTE ----------------
-    if data == "nuevo_aporte":
-
-        if service.existe_aporte(user_id):
-            await query.edit_message_text("⚠️ Ya tienes un aporte en curso.")
-            return
-
-        service.iniciar_aporte(user_id)
-
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⏭ Omitir comentario", callback_data="skip_comment")]
-        ])
-
-        await query.edit_message_text(
-            "✍️ Escribe un comentario u omítelo:",
-            reply_markup=keyboard
-        )
-
+    if data != "enviar_aporte":
         return
 
-    # ---------------- OMITIR COMENTARIO ----------------
-    if data == "skip_comment":
+    aporte = manager.get_active(user_id)
 
-        service.set_comentario(user_id, "")
-
-        await query.edit_message_text(
-            "📷 Envía ahora tus archivos.\n\nCuando termines pulsa Enviar aporte.",
-            reply_markup=menu_enviar()
-        )
-
+    if not aporte:
+        await query.edit_message_text("⚠️ No hay aporte activo.")
         return
 
-    # ---------------- ENVIAR APORTE ----------------
-    if data == "enviar_aporte":
+    user = query.from_user
+    username = f"@{user.username}" if user.username else "Sin username"
 
-        aporte = service.get(user_id)
+    contador = manager.contar(user_id)
 
-        if not aporte:
-            await query.edit_message_text("⚠️ No hay aporte activo.")
-            return
+    texto = (
+        "📥 NUEVO APORTE\n"
+        "━━━━━━━━━━━━━━\n\n"
+        f"👤 Nombre: {user.full_name}\n"
+        f"🔗 Usuario: {username}\n\n"
+        f"📷 Fotos: {contador['photo']}\n"
+        f"🎥 Videos: {contador['video']}\n"
+        f"📄 Docs: {contador['document']}\n"
+        f"🎵 Audio: {contador['audio']}\n\n"
+        f"💬 {aporte.comentario or 'Sin comentario'}"
+    )
 
-        archivos = aporte.get("archivos", [])
+    # -------------------------
+    # ENVIAR TEXTO
+    # -------------------------
+    await context.bot.send_message(chat_id=GROUP_ID, text=texto)
+    await context.bot.send_message(chat_id=FRIEND_ID, text=texto)
 
-        contador = service.contar_archivos(user_id)
+    # -------------------------
+    # RECONSTRUIR MEDIA EN ORDEN
+    # -------------------------
+    media = []
 
-        user = query.from_user
-        username = f"@{user.username}" if user.username else "Sin username"
+    # Álbumes primero (en orden de llegada)
+    for album in aporte.albums.values():
+        album_media = []
 
-        texto = (
-            "📥 NUEVO APORTE\n"
-            "━━━━━━━━━━━━━━\n\n"
-            f"👤 Nombre: {user.full_name}\n"
-            f"🔗 Usuario: {username}\n\n"
-            f"📷 Fotos: {contador['photo']}\n"
-            f"🎥 Videos: {contador['video']}\n"
-            f"📄 Docs: {contador['document']}\n"
-            f"🎵 Audio: {contador['audio']}\n\n"
-            f"💬 {aporte['comentario'] or 'Sin comentario'}"
-        )
+        for f in album:
+            if f["tipo"] == "photo":
+                album_media.append(InputMediaPhoto(f["file_id"]))
+            elif f["tipo"] == "video":
+                album_media.append(InputMediaVideo(f["file_id"]))
 
-        # =====================================================
-        # 📤 ENVIAR TEXTO
-        # =====================================================
-        await context.bot.send_message(chat_id=FRIEND_ID, text=texto)
-        await context.bot.send_message(chat_id=GROUP_ID, text=texto)
+        if album_media:
+            media.append(album_media)
 
-        # =====================================================
-        # 📦 ENVIAR MEDIA (ÁLBUM + SUELTOS BIEN MANEJADO)
-        # =====================================================
+    # Archivos sueltos después
+    for f in aporte.archivos:
 
-        if archivos:
+        if f["tipo"] == "photo":
+            media.append([InputMediaPhoto(f["file_id"])])
 
-            media_group = []
+        elif f["tipo"] == "video":
+            media.append([InputMediaVideo(f["file_id"])])
 
-            for archivo in archivos:
+        elif f["tipo"] == "document":
+            media.append([InputMediaDocument(f["file_id"])])
 
-                tipo = archivo["tipo"]
-                fid = archivo["file_id"]
+        elif f["tipo"] == "audio":
+            media.append([InputMediaAudio(f["file_id"])])
 
-                if tipo == "photo":
-                    media_group.append(InputMediaPhoto(media=fid))
+    # -------------------------
+    # ENVÍO ORDENADO
+    # -------------------------
+    for group in media:
 
-                elif tipo == "video":
-                    media_group.append(InputMediaVideo(media=fid))
+        if len(group) == 1:
+            m = group[0]
 
-                elif tipo == "document":
-                    media_group.append(InputMediaDocument(media=fid))
+            if isinstance(m, InputMediaPhoto):
+                await context.bot.send_photo(GROUP_ID, m.media)
+            elif isinstance(m, InputMediaVideo):
+                await context.bot.send_video(GROUP_ID, m.media)
+            elif isinstance(m, InputMediaDocument):
+                await context.bot.send_document(GROUP_ID, m.media)
+            elif isinstance(m, InputMediaAudio):
+                await context.bot.send_audio(GROUP_ID, m.media)
 
-                elif tipo == "audio":
-                    media_group.append(InputMediaAudio(media=fid))
+        else:
+            await context.bot.send_media_group(
+                chat_id=GROUP_ID,
+                media=group
+            )
 
-            # Telegram permite máximo 10 por álbum
-            chunks = [media_group[i:i+10] for i in range(0, len(media_group), 10)]
+    # -------------------------
+    # LIMPIEZA FINAL
+    # -------------------------
+    manager.aportes[user_id].pop(manager.active[user_id], None)
+    manager.active.pop(user_id, None)
 
-            for chunk in chunks:
-                if len(chunk) == 1:
-                    # si solo hay 1 archivo, enviar normal
-                    m = chunk[0]
-                    if isinstance(m, InputMediaPhoto):
-                        await context.bot.send_photo(GROUP_ID, m.media)
-                    elif isinstance(m, InputMediaVideo):
-                        await context.bot.send_video(GROUP_ID, m.media)
-                    elif isinstance(m, InputMediaDocument):
-                        await context.bot.send_document(GROUP_ID, m.media)
-                    elif isinstance(m, InputMediaAudio):
-                        await context.bot.send_audio(GROUP_ID, m.media)
-                else:
-                    await context.bot.send_media_group(
-                        chat_id=GROUP_ID,
-                        media=chunk
-                    )
-
-        # =====================================================
-        # 🧹 LIMPIEZA FINAL SEGURA
-        # =====================================================
-        service.limpiar(user_id)
-
-        await query.edit_message_text("✅ Aporte enviado correctamente")
+    await query.edit_message_text("✅ Aporte enviado correctamente")
