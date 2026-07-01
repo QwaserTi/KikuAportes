@@ -1,97 +1,79 @@
-import asyncio
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import ContextTypes
 
+from core.panel_manager import panel
 from services.aporte_manager import manager
-from core.album_buffer import AlbumBuffer
-from core.panel_manager import PanelManager
 
-album = AlbumBuffer()
-panel = PanelManager()
+
+def detectar_tipo(msg: Message):
+    if msg.photo:
+        return "photo"
+    if msg.video:
+        return "video"
+    if msg.document:
+        return "document"
+    if msg.audio:
+        return "audio"
+    return None
 
 
 async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if not update.message:
+    msg = update.message
+    if not msg or not msg.from_user:
         return
 
-    msg = update.message
     user_id = msg.from_user.id
-    chat_id = msg.chat_id
-
     aporte = manager.get_active(user_id)
     if not aporte:
         return
 
-    estado = aporte.estado
+    if aporte.sending:
+        await msg.reply_text("⏳ Tu aporte se está enviando. Espera a que termine.")
+        return
 
-    # -------------------------
-    # COMENTARIO
-    # -------------------------
-    if estado == "WAITING_COMMENT":
-
-        manager.set_comentario(user_id, msg.text or "")
-
+    if aporte.estado == "DELIVERY_FAILED":
         await msg.reply_text(
-            "📷 Ahora envía tus archivos.\n\nCuando termines pulsa 'Enviar aporte'."
+            "⚠️ Hay un envío pendiente. Pulsa «Reintentar envío» antes de "
+            "añadir otro aporte."
         )
         return
 
-    if estado != "WAITING_MEDIA":
+    tipo = detectar_tipo(msg)
+
+    # El comentario es opcional. Si llega un archivo mientras se esperaba el
+    # comentario, se interpreta como que el usuario decidió omitirlo.
+    if aporte.estado == "WAITING_COMMENT":
+        if msg.text:
+            manager.set_comentario(user_id, msg.text)
+            await panel.render(user_id, context, msg.chat_id)
+            return
+
+        if tipo:
+            manager.omitir_comentario(user_id)
+        else:
+            return
+
+    if aporte.estado != "WAITING_MEDIA":
         return
 
-    media_group_id = msg.media_group_id
-
-    # -------------------------
-    # ALBUM
-    # -------------------------
-    if media_group_id:
-
-        key = (user_id, media_group_id)
-
-        album.add(key, msg)
-
-        async def procesar_album():
-
-            await asyncio.sleep(1.5)
-
-            messages = album.pop_group(key)
-
-            for m in messages:
-
-                if m.photo:
-                    manager.agregar_archivo(user_id, m.photo[-1].file_id, "photo")
-
-                elif m.video:
-                    manager.agregar_archivo(user_id, m.video.file_id, "video")
-
-                elif m.document:
-                    manager.agregar_archivo(user_id, m.document.file_id, "document")
-
-                elif m.audio:
-                    manager.agregar_archivo(user_id, m.audio.file_id, "audio")
-
-            await panel.render(user_id, context, chat_id, version=1)
-
-        album.cancel(key)
-        task = asyncio.create_task(procesar_album())
-        album.set_task(key, task)
-
+    if not tipo:
+        if msg.text:
+            await msg.reply_text(
+                "ℹ️ El comentario ya está guardado. Ahora envía fotos, videos, "
+                "documentos o audios."
+            )
         return
 
-    # -------------------------
-    # ARCHIVO INDIVIDUAL
-    # -------------------------
-    if msg.photo:
-        manager.agregar_archivo(user_id, msg.photo[-1].file_id, "photo")
+    agregado = manager.agregar_mensaje(
+        user_id=user_id,
+        source_chat_id=msg.chat_id,
+        message_id=msg.message_id,
+        tipo=tipo,
+        media_group_id=msg.media_group_id,
+    )
 
-    elif msg.video:
-        manager.agregar_archivo(user_id, msg.video.file_id, "video")
-
-    elif msg.document:
-        manager.agregar_archivo(user_id, msg.document.file_id, "document")
-
-    elif msg.audio:
-        manager.agregar_archivo(user_id, msg.audio.file_id, "audio")
-
-    await panel.render(user_id, context, chat_id, version=1)
+    if agregado:
+        # Los mensajes de un álbum llegan como actualizaciones separadas. El
+        # panel se agrupa con un pequeño debounce, pero cada mensaje se guarda
+        # inmediatamente y en el envío se ordena por message_id.
+        panel.schedule(user_id, context, msg.chat_id)
