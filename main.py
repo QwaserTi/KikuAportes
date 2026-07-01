@@ -25,11 +25,11 @@ def main():
 
     # ---------------- CALLBACKS ----------------
     app.add_handler(
-        CallbackQueryHandler(
-            buttons,
-            pattern="^(nuevo_aporte|enviar_aporte)$"
-        )
+    CallbackQueryHandler(
+        buttons,
+        pattern="^(nuevo_aporte|skip_comment|enviar_aporte)$"
     )
+)
 
     # ---------------- MENSAJES ----------------
     app.add_handler(
