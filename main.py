@@ -10,7 +10,7 @@ from config import BOT_TOKEN
 
 # handlers
 from handlers.start import start
-from handlers.callbacks import buttons
+from handlers.buttons import buttons
 from handlers.messages import mensajes
 
 
