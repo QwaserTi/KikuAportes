@@ -5,16 +5,19 @@ from models.aporte import Aporte
 class AporteManager:
 
     def __init__(self):
-        # user_id → {aporte_id → Aporte}
+
+        # user_id -> {aporte_id: Aporte}
         self.aportes = defaultdict(dict)
 
-        # user_id → active aporte_id
+        # user_id -> aporte activo
         self.active = {}
 
-    # -------------------------
+    # -------------------------------------------------
     # CREAR APORTE
-    # -------------------------
+    # -------------------------------------------------
+
     def iniciar_aporte(self, user_id):
+
         aporte = Aporte()
 
         self.aportes[user_id][aporte.id] = aporte
@@ -22,89 +25,160 @@ class AporteManager:
 
         return aporte
 
-    # -------------------------
-    # OBTENER ACTIVO
-    # -------------------------
-    def get_active(self, user_id):
-        aid = self.active.get(user_id)
-        if not aid:
-            return None
-        return self.aportes[user_id].get(aid)
+    # -------------------------------------------------
+    # OBTENER APORTE ACTIVO
+    # -------------------------------------------------
 
-    # -------------------------
+    def get_active(self, user_id):
+
+        aporte_id = self.active.get(user_id)
+
+        if not aporte_id:
+            return None
+
+        return self.aportes[user_id].get(aporte_id)
+
+    # -------------------------------------------------
     # COMENTARIO
-    # -------------------------
+    # -------------------------------------------------
+
     def set_comentario(self, user_id, comentario):
+
         aporte = self.get_active(user_id)
+
         if not aporte:
             return
 
         aporte.comentario = comentario
         aporte.estado = "WAITING_MEDIA"
 
-    # -------------------------
-    # ARCHIVOS SUELTOS
-    # -------------------------
+    # -------------------------------------------------
+    # TIMELINE
+    # -------------------------------------------------
+
     def agregar_archivo(self, user_id, file_id, tipo):
+
         aporte = self.get_active(user_id)
+
         if not aporte:
             return
 
-        aporte.archivos.append({
+        aporte.timeline.append({
             "tipo": tipo,
             "file_id": file_id
         })
 
-    # -------------------------
-    # ALBUMS
-    # -------------------------
-    def agregar_album(self, user_id, media_group_id, file_id, tipo):
+    def crear_album(self, user_id, media_group_id):
+
         aporte = self.get_active(user_id)
+
         if not aporte:
             return
 
-        if media_group_id not in aporte.albums:
-            aporte.albums[media_group_id] = []
+        album = {
+            "tipo": "album",
+            "media_group_id": media_group_id,
+            "items": []
+        }
 
-        aporte.albums[media_group_id].append({
+        aporte.timeline.append(album)
+
+        return album
+
+    def obtener_album(self, user_id, media_group_id):
+
+        aporte = self.get_active(user_id)
+
+        if not aporte:
+            return None
+
+        for item in aporte.timeline:
+
+            if (
+                item["tipo"] == "album"
+                and item["media_group_id"] == media_group_id
+            ):
+                return item
+
+        return None
+
+    def agregar_album_archivo(self, user_id, media_group_id, file_id, tipo):
+
+        album = self.obtener_album(user_id, media_group_id)
+
+        if album is None:
+            album = self.crear_album(user_id, media_group_id)
+
+        album["items"].append({
             "tipo": tipo,
             "file_id": file_id
         })
 
-    # -------------------------
+    # -------------------------------------------------
     # CONTADOR
-    # -------------------------
+    # -------------------------------------------------
+
     def contar(self, user_id):
+
         aporte = self.get_active(user_id)
 
-        base = {"photo": 0, "video": 0, "document": 0, "audio": 0}
+        contador = {
+            "photo": 0,
+            "video": 0,
+            "document": 0,
+            "audio": 0
+        }
 
         if not aporte:
-            return base
+            return contador
 
-        for f in aporte.archivos:
-            if f["tipo"] in base:
-                base[f["tipo"]] += 1
+        for item in aporte.timeline:
 
-        for album in aporte.albums.values():
-            for f in album:
-                if f["tipo"] in base:
-                    base[f["tipo"]] += 1
+            if item["tipo"] == "album":
 
-        return base
+                for archivo in item["items"]:
 
-    # -------------------------
-    # STATUS MESSAGE
-    # -------------------------
-    def set_status(self, user_id, msg_id):
+                    if archivo["tipo"] in contador:
+                        contador[archivo["tipo"]] += 1
+
+            else:
+
+                if item["tipo"] in contador:
+                    contador[item["tipo"]] += 1
+
+        return contador
+
+    # -------------------------------------------------
+    # STATUS PANEL
+    # -------------------------------------------------
+
+    def set_status(self, user_id, message_id):
+
         aporte = self.get_active(user_id)
+
         if aporte:
-            aporte.status_message_id = msg_id
+            aporte.status_message_id = message_id
 
     def get_status(self, user_id):
+
         aporte = self.get_active(user_id)
-        return aporte.status_message_id if aporte else None
+
+        if not aporte:
+            return None
+
+        return aporte.status_message_id
+
+    # -------------------------------------------------
+    # LIMPIAR
+    # -------------------------------------------------
+
+    def limpiar(self, user_id):
+
+        aporte_id = self.active.pop(user_id, None)
+
+        if aporte_id:
+
+            self.aportes[user_id].pop(aporte_id, None)
 
 
-# 🔥 INSTANCIA GLOBAL (IMPORTANTE)
 manager = AporteManager()
