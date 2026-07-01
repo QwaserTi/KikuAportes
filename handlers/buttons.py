@@ -1,3 +1,4 @@
+print("🔥 BOTONES DESDE buttons.py ACTIVOS")
 from telegram import Update, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
 from telegram.ext import ContextTypes
 
