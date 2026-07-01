@@ -92,11 +92,11 @@ async def mensajes(
     )
 
     if agregado:
-        # Cada archivo reinicia el temporizador. Dos segundos después
+        # Cada archivo reinicia el temporizador. Un segundo después
         # del último archivo, el panel se coloca debajo de toda la media.
         panel.schedule(
             user_id=user_id,
             context=context,
             chat_id=msg.chat_id,
-            delay=2.0,
+            delay=1.0,
         )
