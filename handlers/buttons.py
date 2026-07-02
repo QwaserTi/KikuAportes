@@ -1,4 +1,5 @@
 import logging
+from html import escape
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
@@ -15,19 +16,40 @@ logger = logging.getLogger(__name__)
 
 def skip_comment_menu():
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("⏭ Omitir comentario", callback_data="skip_comment")]]
+        [
+            [
+                InlineKeyboardButton(
+                    "⏭ Omitir comentario",
+                    callback_data="skip_comment",
+                )
+            ]
+        ]
     )
 
 
 def retry_menu():
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔁 Reintentar envío", callback_data="enviar_aporte")]]
+        [
+            [
+                InlineKeyboardButton(
+                    "🔁 Reintentar envío",
+                    callback_data="enviar_aporte",
+                )
+            ]
+        ]
     )
 
 
 def new_aporte_menu():
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🆕 Nuevo aporte", callback_data="nuevo_aporte")]]
+        [
+            [
+                InlineKeyboardButton(
+                    "🆕 Nuevo aporte",
+                    callback_data="nuevo_aporte",
+                )
+            ]
+        ]
     )
 
 
@@ -45,6 +67,7 @@ def split_text(text, limit=4096):
             break
 
         cut = remaining.rfind("\n", 0, limit + 1)
+
         if cut <= 0:
             cut = limit
 
@@ -55,41 +78,69 @@ def split_text(text, limit=4096):
 
 
 def build_summary(user, contador, comentario):
-    """Crea la ficha que se envía después de toda la media."""
-    username = f"@{user.username}" if user.username else "Sin username"
+    """Crea la ficha final con el nombre enlazado al perfil de Telegram."""
+
+    # Telegram crea un enlace directo al perfil usando el ID del usuario.
+    # Funciona aunque el usuario no tenga @username.
+    nombre_enlazado = user.mention_html()
+
+    username = (
+        f"@{user.username}"
+        if user.username
+        else "Sin username"
+    )
+
     total = sum(contador.values())
-    comentario_texto = comentario if comentario else "Sin comentario"
+
+    # La ficha se envía utilizando HTML.
+    # Escapar el comentario evita errores si contiene <, > o &.
+    comentario_texto = escape(
+        comentario if comentario else "Sin comentario"
+    )
 
     return (
-        "📥 APORTE RECIBIDO\n"
+        "📥 <b>APORTE RECIBIDO</b>\n"
         "━━━━━━━━━━━━━━\n\n"
-        f"👤 Nombre: {user.full_name}\n"
+        f"👤 Nombre: {nombre_enlazado}\n"
         f"🔗 Usuario: {username}\n"
-        f"🆔 ID: {user.id}\n\n"
+        f"🆔 ID: <code>{user.id}</code>\n\n"
         f"📷 Fotos: {contador['photo']}\n"
         f"🎥 Videos: {contador['video']}\n"
         f"📄 Documentos: {contador['document']}\n"
         f"🎵 Audios: {contador['audio']}\n"
         f"📎 Total: {total}\n\n"
-        f"💬 Comentario:\n{comentario_texto}"
+        f"💬 <b>Comentario:</b>\n"
+        f"{comentario_texto}"
     )
 
 
-async def get_destination_thread(context, user_id, destination_id):
+async def get_destination_thread(
+    context,
+    user_id,
+    destination_id,
+):
     """
     Obtiene el tema mensual únicamente para el grupo.
 
-    El ID se guarda también en el progreso del aporte. Si el envío falla y se
-    reintenta después de cambiar de mes, el aporte continuará en el mismo tema.
+    El ID del tema se guarda en el progreso del aporte. Si el envío falla
+    y se reintenta después de cambiar de mes, el aporte continuará en el
+    mismo tema.
     """
     if destination_id != GROUP_ID:
         return None
 
-    progress = manager.get_delivery_progress(user_id, destination_id)
+    progress = manager.get_delivery_progress(
+        user_id,
+        destination_id,
+    )
+
     if not progress:
-        raise RuntimeError("No se pudo crear el progreso del envío al grupo")
+        raise RuntimeError(
+            "No se pudo crear el progreso del envío al grupo"
+        )
 
     saved_thread_id = progress.get("message_thread_id")
+
     if saved_thread_id is not None:
         return int(saved_thread_id)
 
@@ -104,18 +155,32 @@ async def get_destination_thread(context, user_id, destination_id):
     return thread_id
 
 
-async def send_to_destination(context, user_id, destination_id, user, contador):
+async def send_to_destination(
+    context,
+    user_id,
+    destination_id,
+    user,
+    contador,
+):
     """
     Envía primero toda la media y al final la ficha con el comentario.
 
-    En el grupo, todo se envía al tema del mes actual. En el chat del amigo se
-    envía normalmente. El progreso permite reintentar sin duplicar lo enviado.
+    En el grupo, todo se envía al tema correspondiente al mes actual.
+    En el chat del amigo se envía normalmente.
+
+    El progreso permite reintentar sin duplicar contenido.
     """
     aporte = manager.get_active(user_id)
-    progress = manager.get_delivery_progress(user_id, destination_id)
+
+    progress = manager.get_delivery_progress(
+        user_id,
+        destination_id,
+    )
 
     if not aporte or not progress:
-        raise RuntimeError("El aporte dejó de estar disponible durante el envío")
+        raise RuntimeError(
+            "El aporte dejó de estar disponible durante el envío"
+        )
 
     if progress["completed"]:
         return
@@ -126,7 +191,8 @@ async def send_to_destination(context, user_id, destination_id, user, contador):
         destination_id=destination_id,
     )
 
-    # 1. Copiar toda la media en el mismo orden en que llegó.
+    # Primero se copia toda la media en el mismo orden
+    # en el que fue enviada por el usuario.
     batches = manager.construir_lotes_copia(user_id)
 
     while progress["batches_sent"] < len(batches):
@@ -142,12 +208,13 @@ async def send_to_destination(context, user_id, destination_id, user, contador):
 
         if len(copied) != len(batch["message_ids"]):
             raise RuntimeError(
-                "Telegram omitió uno o más mensajes al copiar el aporte"
+                "Telegram omitió uno o más mensajes "
+                "al copiar el aporte"
             )
 
         progress["batches_sent"] += 1
 
-    # 2. Enviar la ficha y el comentario únicamente al terminar la media.
+    # La ficha se envía solamente después de toda la media.
     summary_parts = split_text(
         build_summary(
             user=user,
@@ -156,13 +223,17 @@ async def send_to_destination(context, user_id, destination_id, user, contador):
         )
     )
 
-    while progress["summary_parts_sent"] < len(summary_parts):
+    while (
+        progress["summary_parts_sent"]
+        < len(summary_parts)
+    ):
         index = progress["summary_parts_sent"]
 
         await context.bot.send_message(
             chat_id=destination_id,
             message_thread_id=message_thread_id,
             text=summary_parts[index],
+            parse_mode="HTML",
         )
 
         progress["summary_parts_sent"] += 1
@@ -170,9 +241,17 @@ async def send_to_destination(context, user_id, destination_id, user, contador):
     progress["completed"] = True
 
 
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def buttons(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     query = update.callback_query
-    if not query or not query.from_user or not query.message:
+
+    if (
+        not query
+        or not query.from_user
+        or not query.message
+    ):
         return
 
     user_id = query.from_user.id
@@ -180,23 +259,35 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "nuevo_aporte":
         await query.answer()
+
         manager.iniciar_aporte(user_id)
-        manager.set_status(user_id, query.message.message_id)
+
+        manager.set_status(
+            user_id,
+            query.message.message_id,
+        )
 
         await query.edit_message_text(
             "📝 Escribe un comentario para tu aporte.\n\n"
             "También puedes omitirlo y empezar a enviar archivos.",
             reply_markup=skip_comment_menu(),
         )
+
         return
 
     aporte = manager.get_active(user_id)
+
     if not aporte:
-        await query.answer("No hay un aporte activo.", show_alert=True)
+        await query.answer(
+            "No hay un aporte activo.",
+            show_alert=True,
+        )
+
         await query.edit_message_text(
             "⚠️ No hay un aporte activo.",
             reply_markup=new_aporte_menu(),
         )
+
         return
 
     if data == "skip_comment":
@@ -205,8 +296,17 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if aporte.estado == "WAITING_COMMENT":
             manager.omitir_comentario(user_id)
 
-        manager.set_status(user_id, query.message.message_id)
-        await panel.render(user_id, context, query.message.chat_id)
+        manager.set_status(
+            user_id,
+            query.message.message_id,
+        )
+
+        await panel.render(
+            user_id,
+            context,
+            query.message.chat_id,
+        )
+
         return
 
     if data != "enviar_aporte":
@@ -214,35 +314,64 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if aporte.sending:
-        await query.answer("El aporte ya se está enviando.", show_alert=True)
+        await query.answer(
+            "El aporte ya se está enviando.",
+            show_alert=True,
+        )
+
         return
 
     if manager.total(user_id) == 0:
         await query.answer(
-            "Envía al menos una foto, video, documento o audio.",
+            "Envía al menos una foto, video, "
+            "documento o audio.",
             show_alert=True,
         )
+
         return
 
-    destinations = list(dict.fromkeys([GROUP_ID, FRIEND_ID]))
-    if any(not destination for destination in destinations):
-        await query.answer("Falta configurar un destino en el .env.", show_alert=True)
+    destinations = list(
+        dict.fromkeys(
+            [
+                GROUP_ID,
+                FRIEND_ID,
+            ]
+        )
+    )
+
+    if any(
+        not destination
+        for destination in destinations
+    ):
+        await query.answer(
+            "Falta configurar un destino en el .env.",
+            show_alert=True,
+        )
+
         return
 
     await query.answer("Enviando aporte…")
 
-    # Se marca como envío antes de cancelar el panel para impedir que una
-    # actualización pendiente cree otro panel mientras empieza el envío.
+    # Se marca como envío antes de cancelar el panel.
+    # Esto evita que aparezca otro panel mientras
+    # empieza el envío.
     aporte = manager.iniciar_envio(user_id)
+
     if not aporte:
         return
 
     panel.cancel(user_id)
 
     try:
-        await query.edit_message_text("⏳ Enviando aporte al grupo y al chat…")
+        await query.edit_message_text(
+            "⏳ Enviando aporte al grupo y al chat…"
+        )
+
     except TelegramError:
-        logger.warning("No se pudo actualizar el mensaje de progreso", exc_info=True)
+        logger.warning(
+            "No se pudo actualizar el mensaje de progreso",
+            exc_info=True,
+        )
 
     contador = manager.contar(user_id)
     errors = []
@@ -256,33 +385,57 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user=query.from_user,
                 contador=contador,
             )
+
         except Exception as exc:
             logger.exception(
-                "Error enviando el aporte del usuario %s al destino %s",
+                "Error enviando el aporte del usuario %s "
+                "al destino %s",
                 user_id,
                 destination_id,
             )
-            errors.append((destination_id, exc))
+
+            errors.append(
+                (
+                    destination_id,
+                    exc,
+                )
+            )
 
     if errors:
-        manager.terminar_intento_envio(user_id, completado=False)
-        failed_ids = ", ".join(str(destination_id) for destination_id, _ in errors)
+        manager.terminar_intento_envio(
+            user_id,
+            completado=False,
+        )
+
+        failed_ids = ", ".join(
+            str(destination_id)
+            for destination_id, _ in errors
+        )
 
         await query.edit_message_text(
-            "⚠️ El aporte no pudo completarse en todos los destinos.\n\n"
+            "⚠️ El aporte no pudo completarse "
+            "en todos los destinos.\n\n"
             f"Destino(s) pendiente(s): {failed_ids}\n"
-            "El progreso quedó guardado; al reintentar no se volverán a enviar "
-            "los destinos ya completados.\n\n"
-            "Si falló el grupo, comprueba que tenga los temas activados y que "
-            "el bot pueda administrar temas.",
+            "El progreso quedó guardado; al reintentar "
+            "no se volverán a enviar los destinos "
+            "ya completados.\n\n"
+            "Si falló el grupo, comprueba que tenga "
+            "los temas activados y que el bot pueda "
+            "administrar temas.",
             reply_markup=retry_menu(),
         )
+
         return
 
-    manager.terminar_intento_envio(user_id, completado=True)
+    manager.terminar_intento_envio(
+        user_id,
+        completado=True,
+    )
+
     manager.limpiar(user_id)
 
     await query.edit_message_text(
-        "✅ Aporte enviado correctamente al tema mensual y al chat.",
+        "✅ Aporte enviado correctamente "
+        "al tema mensual y al chat.",
         reply_markup=new_aporte_menu(),
     )
